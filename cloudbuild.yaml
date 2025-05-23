@@ -1,0 +1,130 @@
+steps:
+  # Step 1: Build and pack each library to nuget-packages folder
+  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
+    id: 'Build and pack LibA'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        mkdir -p nuget-packages
+        dotnet pack LibA/LibA.csproj -c Release -o nuget-packages
+
+  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
+    id: 'Build and pack LibB'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        dotnet pack LibB/LibB.csproj -c Release -o nuget-packages
+
+  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
+    id: 'Build and pack LibC'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        dotnet pack LibC/LibC.csproj -c Release -o nuget-packages
+
+  # Step 2: Create NuGet.config inside nuget-packages folder
+  - name: 'ubuntu'
+    id: 'Create NuGet.config'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cat > nuget-packages/NuGet.config <<EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <configuration>
+          <packageSources>
+            <add key="MyLocalNugetRepo" value="file:///home/vij1542044/nuget-packages" />
+          </packageSources>
+        </configuration>
+        EOF
+
+  # Step 3: Zip the nuget-packages folder
+  - name: 'ubuntu'
+    id: 'Zip nuget-packages folder'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        apt-get update && apt-get install -y zip
+        zip -r nuget-packages.zip nuget-packages
+
+  # Step 4: Create GCE VM
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'Create VM'
+    args:
+      - compute
+      - instances
+      - create
+      - my-vm-instance
+      - --zone=asia-east1-b
+      - --machine-type=e2-micro
+      - --image-family=debian-11
+      - --image-project=debian-cloud
+      - --boot-disk-size=20GB
+      - --tags=http-server
+      - --scopes=https://www.googleapis.com/auth/cloud-platform
+      - --service-account=880653953247-compute@developer.gserviceaccount.com
+      - --project=onyx-antler-459216-j6
+
+  # Step 5: Copy nuget-packages.zip to VM
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'Copy NuGet packages archive to VM'
+    args:
+      - compute
+      - scp
+      - nuget-packages.zip
+      - vij1542044@my-vm-instance:/home/vij1542044
+      - --zone=asia-east1-b
+      - --project=onyx-antler-459216-j6
+
+  # Step 6: Create startup script locally in Cloud Build environment
+  - name: 'ubuntu'
+    id: 'Create startup script'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cat << 'EOF' > startup.sh
+        #!/bin/bash
+        set -e
+
+        # Install unzip if not installed
+        if ! command -v unzip &> /dev/null; then
+          sudo apt-get update
+          sudo apt-get install -y unzip
+        fi
+
+        # Unzip nuget-packages.zip into home folder
+        unzip /home/vij1542044/nuget-packages.zip -d /home/vij1542044/
+
+        # Set permissions
+        chown -R vij1542044:vij1542044 /home/vij1542044/nuget-packages
+        EOF
+
+  # Step 7: Copy startup script to VM
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'Copy startup script to VM'
+    args:
+      - compute
+      - scp
+      - startup.sh
+      - vij1542044@my-vm-instance:/home/vij1542044
+      - --zone=asia-east1-b
+      - --project=onyx-antler-459216-j6
+
+  # Step 8: SSH into VM and run startup script
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'Run startup script on VM'
+    args:
+      - compute
+      - ssh
+      - vij1542044@my-vm-instance
+      - --zone=asia-east1-b
+      - --project=onyx-antler-459216-j6
+      - --command=bash /home/vij1542044/startup.sh
+
+options:
+  logging: CLOUD_LOGGING_ONLY

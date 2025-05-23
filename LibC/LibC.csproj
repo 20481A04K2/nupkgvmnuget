@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <PackageId>LibC</PackageId>
+    <Version>3.0.0</Version>
+    <Authors>vamsi</Authors>
+    <Description>LibC math package</Description>
+  </PropertyGroup>
+
+</Project>

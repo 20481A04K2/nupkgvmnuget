@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <PackageId>LibB</PackageId>
+    <Version>2.1.0</Version>
+    <Authors>YourName</Authors>
+    <Description>LibB helper package</Description>
+  </PropertyGroup>
+
+</Project>
