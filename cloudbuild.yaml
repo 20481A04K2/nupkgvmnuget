@@ -10,8 +10,8 @@ steps:
         echo "VERSION_TAG=$$VERSION_TAG" > /workspace/version.env
         echo "Generated version: $$VERSION_TAG"
 
-  # Step 1: Pack .nupkg from existing LibA, LibB, LibC using .NET 7 SDK
-  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
+  # Step 1: Pack .nupkg from existing LibA, LibB, LibC using .NET 6 SDK
+  - name: 'mcr.microsoft.com/dotnet/sdk:6.0'
     id: 'Pack Libraries'
     entrypoint: 'bash'
     args:
@@ -56,8 +56,8 @@ steps:
             --source="$$PKG_FILE"
         done
 
-  # Step 4: Publish Applications using .NET 7 SDK
-  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
+  # Step 4: Publish Applications using .NET 6 SDK
+  - name: 'mcr.microsoft.com/dotnet/sdk:6.0'
     id: 'Publish Applications'
     entrypoint: 'bash'
     args:
@@ -105,7 +105,7 @@ steps:
         done
 
         echo "#!/bin/bash" > startup.sh
-        echo "sudo apt update && sudo apt install -y dotnet-runtime-7.0" >> startup.sh
+        echo "sudo apt update && sudo apt install -y dotnet-runtime-6.0" >> startup.sh
         echo "" >> startup.sh
         echo "for lib in LibA LibB LibC; do" >> startup.sh
         echo "  mkdir -p /home/vij1542044/$$lib" >> startup.sh
