@@ -10,8 +10,8 @@ steps:
         echo "VERSION_TAG=$$VERSION_TAG" > /workspace/version.env
         echo "Generated version: $$VERSION_TAG"
 
-  # Step 1: Pack .nupkg from existing LibA, LibB, LibC
-  - name: 'mcr.microsoft.com/dotnet/sdk:6.0'
+  # Step 1: Pack .nupkg from existing LibA, LibB, LibC using .NET 7 SDK
+  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
     id: 'Pack Libraries'
     entrypoint: 'bash'
     args:
@@ -56,8 +56,8 @@ steps:
             --source="$$PKG_FILE"
         done
 
-  # Step 4: Publish Applications
-  - name: 'mcr.microsoft.com/dotnet/sdk:6.0'
+  # Step 4: Publish Applications using .NET 7 SDK
+  - name: 'mcr.microsoft.com/dotnet/sdk:7.0'
     id: 'Publish Applications'
     entrypoint: 'bash'
     args:
@@ -105,7 +105,7 @@ steps:
         done
 
         echo "#!/bin/bash" > startup.sh
-        echo "sudo apt update && sudo apt install -y dotnet-runtime-6.0" >> startup.sh
+        echo "sudo apt update && sudo apt install -y dotnet-runtime-7.0" >> startup.sh
         echo "" >> startup.sh
         echo "for lib in LibA LibB LibC; do" >> startup.sh
         echo "  mkdir -p /home/vij1542044/$$lib" >> startup.sh
@@ -144,13 +144,10 @@ steps:
     args:
       - '-c'
       - |
-        # Create a zip archive of published/, systemd/, and startup.sh
         zip -r deploy_package.zip published systemd startup.sh
         
-        # Copy the zip archive to the VM
         gcloud compute scp deploy_package.zip vij1542044@my-vm-instance:/home/vij1542044/ --zone=asia-east1-b --project=onyx-antler-459216-j6
         
-        # SSH into VM, unzip archive, and run startup.sh
         gcloud compute ssh vij1542044@my-vm-instance --zone=asia-east1-b --project=onyx-antler-459216-j6 --command="
           cd /home/vij1542044 &&
           unzip -o deploy_package.zip &&
