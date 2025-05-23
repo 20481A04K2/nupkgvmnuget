@@ -6,9 +6,9 @@ steps:
     args:
       - '-c'
       - |
-        VERSION_TAG="v-$(date +%Y%m%d-%H%M%S)"
-        echo "VERSION_TAG=$VERSION_TAG" > /workspace/version.env
-        echo "Generated version: $VERSION_TAG"
+        VERSION_TAG="v-$$(date +%Y%m%d-%H%M%S)"
+        echo "VERSION_TAG=$$VERSION_TAG" > /workspace/version.env
+        echo "Generated version: $$VERSION_TAG"
 
   # Step 1: Pack .nupkg from existing LibA, LibB, LibC
   - name: 'mcr.microsoft.com/dotnet/sdk:6.0'
@@ -20,8 +20,8 @@ steps:
         source /workspace/version.env
         mkdir -p output
         for lib in LibA LibB LibC; do
-          dotnet restore $lib/$lib.csproj
-          dotnet pack $lib/$lib.csproj -o ./output/ --version-suffix "$VERSION_TAG"
+          dotnet restore $$lib/$$lib.csproj
+          dotnet pack $$lib/$$lib.csproj -o ./output/ --version-suffix "$$VERSION_TAG"
         done
 
   # Step 2: Create Artifact Registry if not exists
@@ -46,14 +46,14 @@ steps:
       - |
         source /workspace/version.env
         for lib in LibA LibB LibC; do
-          PKG_FILE=$(ls output/$lib.*.nupkg)
+          PKG_FILE=$$(ls output/$$lib.*.nupkg)
           gcloud artifacts generic upload \
             --project="onyx-antler-459216-j6" \
             --location="us-central1" \
             --repository="nupkgvmnuget" \
-            --package="$lib" \
-            --version="$VERSION_TAG" \
-            --source="$PKG_FILE"
+            --package="$$lib" \
+            --version="$$VERSION_TAG" \
+            --source="$$PKG_FILE"
         done
 
   # Step 4: Publish Applications
@@ -66,10 +66,10 @@ steps:
         source /workspace/version.env
         mkdir -p published
         for lib in LibA LibB LibC; do
-          dotnet publish $lib/$lib.csproj -c Release -o published/$lib
+          dotnet publish $$lib/$$lib.csproj -c Release -o published/$$lib
         done
 
-  # Step 5: Create systemd services and startup script with proper indentation
+  # Step 5: Create systemd services and startup script with proper indentation and escaping
   - name: 'ubuntu'
     id: 'Prepare Systemd'
     entrypoint: 'bash'
@@ -77,52 +77,49 @@ steps:
       - '-c'
       - |
         mkdir systemd
+
         for lib in LibA LibB LibC; do
-          if [ "$lib" == "LibA" ]; then
+          if [ "$$lib" == "LibA" ]; then
             PORT=8081
-          elif [ "$lib" == "LibB" ]; then
+          elif [ "$$lib" == "LibB" ]; then
             PORT=8082
           else
             PORT=8083
           fi
 
-          cat <<EOF > systemd/${lib}.service
-[Unit]
-Description=${lib} Service
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/dotnet /home/vij1542044/${lib}/${lib}.dll --urls=http://0.0.0.0:${PORT}
-WorkingDirectory=/home/vij1542044/${lib}
-Restart=always
-RestartSec=10
-SyslogIdentifier=${lib}
-User=root
-Environment=DOTNET_ENVIRONMENT=Production
-
-[Install]
-WantedBy=multi-user.target
-EOF
+          echo "[Unit]" > systemd/$$lib.service
+          echo "Description=$$lib Service" >> systemd/$$lib.service
+          echo "After=network.target" >> systemd/$$lib.service
+          echo "" >> systemd/$$lib.service
+          echo "[Service]" >> systemd/$$lib.service
+          echo "ExecStart=/usr/bin/dotnet /home/vij1542044/$$lib/$$lib.dll --urls=http://0.0.0.0:$$PORT" >> systemd/$$lib.service
+          echo "WorkingDirectory=/home/vij1542044/$$lib" >> systemd/$$lib.service
+          echo "Restart=always" >> systemd/$$lib.service
+          echo "RestartSec=10" >> systemd/$$lib.service
+          echo "SyslogIdentifier=$$lib" >> systemd/$$lib.service
+          echo "User=root" >> systemd/$$lib.service
+          echo "Environment=DOTNET_ENVIRONMENT=Production" >> systemd/$$lib.service
+          echo "" >> systemd/$$lib.service
+          echo "[Install]" >> systemd/$$lib.service
+          echo "WantedBy=multi-user.target" >> systemd/$$lib.service
         done
 
-        cat <<'EOSTARTUP' > startup.sh
-#!/bin/bash
-sudo apt update && sudo apt install -y dotnet-runtime-6.0
-
-for lib in LibA LibB LibC; do
-  mkdir -p /home/vij1542044/$lib
-  cp -r published/$lib/* /home/vij1542044/$lib/
-  cp systemd/$lib.service /etc/systemd/system/$lib.service
-done
-
-systemctl daemon-reexec
-systemctl daemon-reload
-
-for lib in LibA LibB LibC; do
-  systemctl enable $lib.service
-  systemctl start $lib.service
-done
-EOSTARTUP
+        echo "#!/bin/bash" > startup.sh
+        echo "sudo apt update && sudo apt install -y dotnet-runtime-6.0" >> startup.sh
+        echo "" >> startup.sh
+        echo "for lib in LibA LibB LibC; do" >> startup.sh
+        echo "  mkdir -p /home/vij1542044/$$lib" >> startup.sh
+        echo "  cp -r published/$$lib/* /home/vij1542044/$$lib/" >> startup.sh
+        echo "  cp systemd/$$lib.service /etc/systemd/system/$$lib.service" >> startup.sh
+        echo "done" >> startup.sh
+        echo "" >> startup.sh
+        echo "systemctl daemon-reexec" >> startup.sh
+        echo "systemctl daemon-reload" >> startup.sh
+        echo "" >> startup.sh
+        echo "for lib in LibA LibB LibC; do" >> startup.sh
+        echo "  systemctl enable $$lib.service" >> startup.sh
+        echo "  systemctl start $$lib.service" >> startup.sh
+        echo "done" >> startup.sh
 
         chmod +x startup.sh
 
@@ -140,17 +137,25 @@ EOSTARTUP
       - --image-project=debian-cloud
       - --boot-disk-size=20GB
 
-  # Step 7: Copy published files, systemd services and startup script to VM and execute startup.sh
+  # Step 7: Zip published, systemd, startup.sh; copy to VM; unzip and run startup.sh
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'Copy Files to VM and Run Startup'
+    id: 'Copy and Deploy Archive to VM'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        gcloud compute scp --recurse published vij1542044@my-vm-instance:/home/vij1542044/ --zone=asia-east1-b --project=onyx-antler-459216-j6
-        gcloud compute scp --recurse systemd vij1542044@my-vm-instance:/home/vij1542044/ --zone=asia-east1-b --project=onyx-antler-459216-j6
-        gcloud compute scp startup.sh vij1542044@my-vm-instance:/home/vij1542044/startup.sh --zone=asia-east1-b --project=onyx-antler-459216-j6
-        gcloud compute ssh vij1542044@my-vm-instance --zone=asia-east1-b --project=onyx-antler-459216-j6 --command="bash /home/vij1542044/startup.sh"
+        # Create a zip archive of published/, systemd/, and startup.sh
+        zip -r deploy_package.zip published systemd startup.sh
+        
+        # Copy the zip archive to the VM
+        gcloud compute scp deploy_package.zip vij1542044@my-vm-instance:/home/vij1542044/ --zone=asia-east1-b --project=onyx-antler-459216-j6
+        
+        # SSH into VM, unzip archive, and run startup.sh
+        gcloud compute ssh vij1542044@my-vm-instance --zone=asia-east1-b --project=onyx-antler-459216-j6 --command="
+          cd /home/vij1542044 &&
+          unzip -o deploy_package.zip &&
+          bash startup.sh
+        "
 
 options:
   logging: CLOUD_LOGGING_ONLY
