@@ -1,11 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
-    <PackageId>LibB</PackageId>
-    <Version>2.1.0</Version>
-    <Authors>YourName</Authors>
-    <Description>LibB helper package</Description>
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
-
 </Project>
